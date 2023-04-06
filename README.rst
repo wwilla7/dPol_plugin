@@ -2,8 +2,9 @@
 OpenFF SMIRNOFF plugin for polarizability
 ==========================================
 
-.. warning::
-    **This code is experimental and not suitable for production.**
+Warning
+-------
+**This code is experimental and not suitable for production.**
 
 Dependencies
 ------------
@@ -17,7 +18,7 @@ Installation
 ------------
 
 * openff-interchange
-    | Because there are two parameter handlers in one collection, we use a slightly modified version os interchange until the new feature gets an official support. `Reference <https://github.com/openforcefield/openff-interchange/pull/648>`_
+    | Because there are two parameter handlers in one collection, we use a slightly modified version of interchange until the new feature gets an official support. `Reference <https://github.com/openforcefield/openff-interchange/pull/648>`_
 
 .. code-block:: sh
 
@@ -27,7 +28,8 @@ Installation
     conda env -f devtools/conda-envs/dev_env.yaml
     pip install -e .
 
-* MPID_plugin
+* MPID_Plugin
+    | Experimental codes
 .. code-block:: sh
 
     git clone git@github.com:wwilla7/MPID_plugin.git
@@ -42,12 +44,15 @@ Installation
 Examples
 ----------
 
-`example.py <examples/example.py>`_
-    Provides an example to use this plugin.
+* `example.py <examples/example.py>`_ provides an example to use this plugin.
 
-`forcefield.xml <examples/forcefield.xml>`_
-    The output openff-style force field file.
+* `forcefield.xml <examples/forcefield.offxml>`_ is the output openff-style force field file.
 
-`system.xml <examples/system.xml>`_
-    The OpenMM system created by ``openff-interchange``
+* `system.xml <examples/system.xml>`_ is the OpenMM system created by ``openff-interchange``
 
+
+Copyright
+---------
+
+.. include::
+    LICENSE
