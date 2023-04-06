@@ -96,7 +96,7 @@ class MPIDCollection(SMIRNOFFCollection):
             "thole",
         )
 
-    def store_potentials(
+    def store_matches(
         self,
         parameter_handler: List[ParameterHandler],
         topology: "Topology",
@@ -128,7 +128,7 @@ class MPIDCollection(SMIRNOFFCollection):
             topology_key = MultipoleKey(atom_indices=key)
             potential_key = PotentialKey(
                 id=val.parameter_type.smirks,
-                associated_handler=parameter_handler.TAGNAME,
+                associated_handler=multipole_handler.TAGNAME,
             )
             self.key_map[topology_key] = potential_key
 
@@ -136,7 +136,7 @@ class MPIDCollection(SMIRNOFFCollection):
             topology_key = PolarizabilityKey(atom_indices=key)
             potential_key = PotentialKey(
                 id=val.parameter_type.smirks,
-                associated_handler=parameter_handler.TAGNAME,
+                associated_handler=polarizability_handler.TAGNAME,
             )
             self.key_map[topology_key] = potential_key
 
