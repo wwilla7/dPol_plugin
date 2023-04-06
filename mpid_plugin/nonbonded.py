@@ -16,6 +16,11 @@ from openff.toolkit.typing.engines.smirnoff.parameters import (
     unit,
 )
 
+import mpidplugin
+from mpidplugin import MPIDForce
+
+import numpy as np
+
 if TYPE_CHECKING:
     from openff.interchange.models import VirtualSiteKey
 
@@ -77,7 +82,6 @@ class MPIDPolarizabilityHandler(ParameterHandler):
 
 
 class MPIDCollection(SMIRNOFFCollection):
-
     is_plugin = True
 
     type: Literal["MPID"] = "MPID"
@@ -85,8 +89,8 @@ class MPIDCollection(SMIRNOFFCollection):
     expression: str = "Direct Polarization"
 
     coulomb14scale: float = Field(
-            1.0,
-            description="The scaling factor applied to 1-4 interactions")
+        1.0, description="The scaling factor applied to 1-4 interactions"
+    )
 
     @classmethod
     def allowed_parameter_handlers(cls):
@@ -218,16 +222,34 @@ class MPIDCollection(SMIRNOFFCollection):
 
         for particle_index in range(nonbonded_force.getNumParticles()):
             _, sigma, epsilon = nonbonded_force.getParticleParameters(particle_index)
-            nonbonded_force.setParticleParameters(
-                particle_index, 0.0, sigma, epsilon
-            )
+            nonbonded_force.setParticleParameters(particle_index, 0.0, sigma, epsilon)
 
         # Pesudocode from here to end of file!
+        # First attempt to create MPIDForce
         # Create the MPID force
         mpid_collection = interchange.collections["MPID"]
 
-        mpid_force = openmm.MPIDForce(coulomb14scale=mpid_collection.coulomb14scale)
-        system.addForce(mpid_force)
+        mpid_force = MPIDForce()
+        mpid_force.setPolarizationType(MPIDForce.Direct)
+        mpid_force.set14ScaleFactor(mpid_collection.coulomb14scale)
+
+        # Every atom has partial charge but not every atom has polarizability parameter
+        # Let's start with all of them have both charges and polarizabilities
+        # No multipole parameters
+
+        n_particles = system.getNumParticles()
+
+        # Because we use direct polarization and monopole, we can preset these parameters
+        parameter_maps = {
+            i: {
+                "dipole": np.zeros(3).tolist(),
+                "quadrupole": np.zeros(6).tolist(),
+                "octopole": np.zeros(10).tolist(),
+                "axisType": 0,
+                "thole": 8.0,
+            }
+            for i in range(n_particles)
+        }
 
         # Set the multipole and polarizability parameters on the force
         for topology_key, potential_key in mpid_collection.potentials.items():
@@ -235,16 +257,51 @@ class MPIDCollection(SMIRNOFFCollection):
             openmm_particle_index = particle_map[openff_particle_index]
 
             if isinstance(topology_key, MultipoleKey):
-                multipole: Potential = mpid_collection.potentials[potential_key]
+                # multipole: Potential = mpid_collection.potentials[potential_key]
                 # Set multipole on multipole force using OpenMM particle index,
                 # c0 from `potential_key.parameters['c0']`
-                mpid_force.addMultipole(...)
+                parameter_maps[openmm_particle_index][
+                    "charge"
+                ] = potential_key.parameters["c0"].m_as(unit.elementary_charge)
 
             if isinstance(topology_key, PolarizabilityKey):
-                polarizability: Potential = mpid_collection.potentials[potential_key]
+                # polarizability: Potential = mpid_collection.potentials[potential_key]
                 # Set polarizability on multipole force using OpenMM particle index,
                 # polarizabilityXX, polarizabilityYY, polarizabilityZZ, thole from
                 # `potential_key.parameters['polarizabilityXX']`, etc.
-                mpid_force.addPolarizability(...)
+                parameter_maps[openmm_particle_index]["polarizability"] = [
+                    potential_key.parameters["polarizabilityXX"].m_as(
+                        unit.nanometer**3
+                    ),
+                    potential_key.parameters["polarizabilityYY"].m_as(
+                        unit.nanometer**3
+                    ),
+                    potential_key.parameters["polarizabilityZZ"].m_as(
+                        unit.nanometer**3
+                    ),
+                ]
+
+                parameter_maps[openmm_particle_index]["thole"] = float(
+                    potential_key.parameters["thole"].magnitude
+                )
+
+        ## Add multipoles
+
+        for particle in range(n_particles):
+            mpid_force.addMultipole(
+                parameter_maps[particle]["charge"],
+                parameter_maps[particle]["dipole"],
+                parameter_maps[particle]["quadrupole"],
+                parameter_maps[particle]["quadrupole"],
+                parameter_maps[particle]["axisType"],
+                -1,
+                -1,
+                -1,
+                parameter_maps[particle]["thole"],
+                parameter_maps[particle]["polarizability"],
+            )
+        system.addForce(mpid_force)
+
+        ## TODO: Add `CovalentMap`
 
         # Plus whatever other housekeeping needs to happen with the OpenMM forces
