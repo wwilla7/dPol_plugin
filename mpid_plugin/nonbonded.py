@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Set, Tuple, Union
+from pydantic import Field
 
 import openmm
 from openff.interchange import Interchange
@@ -76,9 +77,16 @@ class MPIDPolarizabilityHandler(ParameterHandler):
 
 
 class MPIDCollection(SMIRNOFFCollection):
+
+    is_plugin = True
+
     type: Literal["MPID"] = "MPID"
 
     expression: str = "Direct Polarization"
+
+    coulomb14scale: float = Field(
+            1.0,
+            description="The scaling factor applied to 1-4 interactions")
 
     @classmethod
     def allowed_parameter_handlers(cls):
