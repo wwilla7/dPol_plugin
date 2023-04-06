@@ -22,10 +22,12 @@ if TYPE_CHECKING:
 
 
 class MultipoleKey(TopologyKey):
+    name = Literal["Multipole"]
     pass
 
 
 class PolarizabilityKey(TopologyKey):
+    name = Literal["Polarizability"]
     pass
 
 
@@ -76,7 +78,7 @@ class MPIDPolarizabilityHandler(ParameterHandler):
 class MPIDCollection(SMIRNOFFCollection):
     type: Literal["MPID"] = "MPID"
 
-    expression: str = ""
+    expression: str = "Direct Polarization"
 
     @classmethod
     def allowed_parameter_handlers(cls):
@@ -114,7 +116,7 @@ class MPIDCollection(SMIRNOFFCollection):
         multipole_matches = multipole_handler.find_matches(topology)
 
         # not all atoms have polarizbility
-        polarizability_handler = polarizability_handler.find_matches(topology)
+        polarizability_matches = polarizability_handler.find_matches(topology)
 
         # WW has custom charges (stored as multipole parameters) using a custom model,
         # which has potentially many smirks-to-charge mappings. By contrast, there are
@@ -130,7 +132,7 @@ class MPIDCollection(SMIRNOFFCollection):
             )
             self.key_map[topology_key] = potential_key
 
-        for key, val in polarizability_handler.items():
+        for key, val in polarizability_matches.items():
             topology_key = PolarizabilityKey(atom_indices=key)
             potential_key = PotentialKey(
                 id=val.parameter_type.smirks,
@@ -148,12 +150,12 @@ class MPIDCollection(SMIRNOFFCollection):
 
         self.coulomb14scale = parameter_handler[0].coulomb14scale
 
-        for potential_key in self.key_map.values():
+        for topology_key, potential_key in self.key_map.items():
             if potential_key.associated_handler == "MPIDMultipole":
                 smirks = potential_key.id
                 parameter = multipole_handler.parameters[smirks]
 
-                self.potentials[potential_key] = Potential(
+                self.potentials[topology_key] = Potential(
                     parameters={"c0": parameter.c0}
                 )
 
@@ -161,7 +163,7 @@ class MPIDCollection(SMIRNOFFCollection):
                 smirks = potential_key.id
                 parameter = polarizability_handler.parameters[smirks]
 
-                self.potentials[potential_key] = Potential(
+                self.potentials[topology_key] = Potential(
                     parameters={
                         "polarizabilityXX": parameter.polarizabilityXX,
                         "polarizabilityYY": parameter.polarizabilityYY,
@@ -173,7 +175,7 @@ class MPIDCollection(SMIRNOFFCollection):
     @classmethod
     def create(
         cls,
-        parameter_handler: List[ParameterAttribute],
+        parameter_handler: List[ParameterHandler],
         topology: Topology,
     ):
         # Assume the two handlers have the same coluomb14scale
@@ -209,7 +211,7 @@ class MPIDCollection(SMIRNOFFCollection):
         for particle_index in range(nonbonded_force.getNumParticles()):
             _, sigma, epsilon = nonbonded_force.getParticleParameters(particle_index)
             nonbonded_force.setParticleParameters(
-                particle_index, 0.0 * unit.elementary_charge, sigma, epsilon
+                particle_index, 0.0, sigma, epsilon
             )
 
         # Pesudocode from here to end of file!
