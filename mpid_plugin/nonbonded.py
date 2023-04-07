@@ -18,7 +18,8 @@ from openff.toolkit.typing.engines.smirnoff.parameters import (
 
 import mpidplugin
 from mpidplugin import MPIDForce
-
+from openmm.app import ForceField
+from openmm.app.forcefield import AmoebaVdwGenerator
 import numpy as np
 
 if TYPE_CHECKING:
@@ -232,6 +233,8 @@ class MPIDCollection(SMIRNOFFCollection):
         mpid_force = MPIDForce()
         mpid_force.setPolarizationType(MPIDForce.Direct)
         mpid_force.set14ScaleFactor(mpid_collection.coulomb14scale)
+        mpid_force.setNonbondedMethod(nonbonded_force.getNonbondedMethod())
+        mpid_force.setCutoffDistance(nonbonded_force.getCutoffDistance())
 
         # Every atom has partial charge but not every atom has polarizability parameter
         # Let's start with all of them have both charges and polarizabilities
@@ -245,7 +248,7 @@ class MPIDCollection(SMIRNOFFCollection):
                 "dipole": np.zeros(3).tolist(),
                 "quadrupole": np.zeros(6).tolist(),
                 "octopole": np.zeros(10).tolist(),
-                "axisType": 0,
+                "axisType": 5,
                 "thole": 8.0,
             }
             for i in range(n_particles)
@@ -286,6 +289,45 @@ class MPIDCollection(SMIRNOFFCollection):
                 )
 
         ## Add multipoles
+        ## Find covalentMap
+        omm_ff = ForceField()
+        data = omm_ff._SystemData(interchange.topology.to_openmm())
+        bonded12ParticleSets = AmoebaVdwGenerator.getBondedParticleSets(system, data)
+
+        bonded13ParticleSets = []
+        for i in range(len(data.atoms)):
+            bonded13Set = set()
+            bonded12ParticleSet = bonded12ParticleSets[i]
+            for j in bonded12ParticleSet:
+                bonded13Set = bonded13Set.union(bonded12ParticleSets[j])
+
+        # remove 1-2 and self from set
+
+            bonded13Set = bonded13Set - bonded12ParticleSet
+            selfSet = set()
+            selfSet.add(i)
+            bonded13Set = bonded13Set - selfSet
+            bonded13Set = set(sorted(bonded13Set))
+            bonded13ParticleSets.append(bonded13Set)
+
+        # 1-4
+
+        bonded14ParticleSets = []
+        for i in range(len(data.atoms)):
+            bonded14Set = set()
+            bonded13ParticleSet = bonded13ParticleSets[i]
+            for j in bonded13ParticleSet:
+                bonded14Set = bonded14Set.union(bonded12ParticleSets[j])
+
+        # remove 1-3, 1-2 and self from set
+
+            bonded14Set = bonded14Set - bonded12ParticleSets[i]
+            bonded14Set = bonded14Set - bonded13ParticleSet
+            selfSet = set()
+            selfSet.add(i)
+            bonded14Set = bonded14Set - selfSet
+            bonded14Set = set(sorted(bonded14Set))
+            bonded14ParticleSets.append(bonded14Set)
 
         for particle in range(n_particles):
             mpid_force.addMultipole(
@@ -300,8 +342,12 @@ class MPIDCollection(SMIRNOFFCollection):
                 parameter_maps[particle]["thole"],
                 parameter_maps[particle]["polarizability"],
             )
+        ## TODO: Add `CovalentMap`
+            mpid_force.setCovalentMap(particle, MPIDForce.Covalent12, tuple(bonded12ParticleSets[particle]))
+            mpid_force.setCovalentMap(particle, MPIDForce.Covalent13, tuple(bonded13ParticleSets[particle]))
+            mpid_force.setCovalentMap(particle, MPIDForce.Covalent14, tuple(bonded14ParticleSets[particle]))
+
         system.addForce(mpid_force)
 
-        ## TODO: Add `CovalentMap`
 
         # Plus whatever other housekeeping needs to happen with the OpenMM forces

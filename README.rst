@@ -54,5 +54,9 @@ Examples
 Copyright
 ---------
 
+MIT License
+
+Copyright (c) 2023 Open Force Field Initiative
+
 .. include::
     LICENSE
