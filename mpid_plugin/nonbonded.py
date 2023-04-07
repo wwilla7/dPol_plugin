@@ -19,6 +19,8 @@ from openff.toolkit.typing.engines.smirnoff.parameters import (
 import mpidplugin
 from mpidplugin import MPIDForce
 from openmm.app import ForceField
+from openmm.app import NoCutoff, PME, LJPME
+NONBONDED_METHODS = { 0 : NoCutoff, 4: PME, 5:LJPME}
 from openmm.app.forcefield import AmoebaVdwGenerator
 import numpy as np
 
@@ -224,17 +226,25 @@ class MPIDCollection(SMIRNOFFCollection):
         for particle_index in range(nonbonded_force.getNumParticles()):
             _, sigma, epsilon = nonbonded_force.getParticleParameters(particle_index)
             nonbonded_force.setParticleParameters(particle_index, 0.0, sigma, epsilon)
+        
+        nonbonded_method = NONBONDED_METHODS[nonbonded_force.getNonbondedMethod()]
+        cutoff_distance = nonbonded_force.getCutoffDistance()
 
         # Pesudocode from here to end of file!
         # First attempt to create MPIDForce
         # Create the MPID force
+        methodMap = {NoCutoff:MPIDForce.NoCutoff,
+                     PME:MPIDForce.PME,
+                     LJPME:MPIDForce.PME}
         mpid_collection = interchange.collections["MPID"]
 
         mpid_force = MPIDForce()
+        
+        mpid_force.setNonbondedMethod(methodMap[nonbonded_method])
+
+        mpid_force.setCutoffDistance(cutoff_distance)
         mpid_force.setPolarizationType(MPIDForce.Direct)
         mpid_force.set14ScaleFactor(mpid_collection.coulomb14scale)
-        mpid_force.setNonbondedMethod(nonbonded_force.getNonbondedMethod())
-        mpid_force.setCutoffDistance(nonbonded_force.getCutoffDistance())
 
         # Every atom has partial charge but not every atom has polarizability parameter
         # Let's start with all of them have both charges and polarizabilities
