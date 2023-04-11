@@ -344,7 +344,7 @@ class MPIDCollection(SMIRNOFFCollection):
                 parameter_maps[particle]["charge"],
                 parameter_maps[particle]["dipole"],
                 parameter_maps[particle]["quadrupole"],
-                parameter_maps[particle]["quadrupole"],
+                parameter_maps[particle]["octopole"],
                 parameter_maps[particle]["axisType"],
                 -1,
                 -1,
