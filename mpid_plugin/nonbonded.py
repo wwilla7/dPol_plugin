@@ -302,6 +302,9 @@ class MPIDCollection(SMIRNOFFCollection):
         ## Find covalentMap
         omm_ff = ForceField()
         data = omm_ff._SystemData(interchange.topology.to_openmm())
+
+        ## Reference 
+        ## https://github.com/openmm/openmm/blob/master/plugins/amoeba/openmmapi/src/AmoebaMultipoleForce.cpp
         bonded12ParticleSets = AmoebaVdwGenerator.getBondedParticleSets(system, data)
 
         bonded13ParticleSets = []
