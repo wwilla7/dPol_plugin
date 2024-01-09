@@ -20,7 +20,8 @@ import mpidplugin
 from mpidplugin import MPIDForce
 from openmm.app import ForceField
 from openmm.app import NoCutoff, PME, LJPME
-NONBONDED_METHODS = { 0 : NoCutoff, 4: PME, 5:LJPME}
+
+NONBONDED_METHODS = {0: NoCutoff, 4: PME, 5: LJPME}
 from openmm.app.forcefield import AmoebaVdwGenerator
 import numpy as np
 
@@ -86,6 +87,7 @@ class MPIDPolarizabilityHandler(ParameterHandler):
 
 class MPIDCollection(SMIRNOFFCollection):
     is_plugin = True
+    acts_as: str = "MPID"
 
     type: Literal["MPID"] = "MPID"
 
@@ -226,20 +228,22 @@ class MPIDCollection(SMIRNOFFCollection):
         for particle_index in range(nonbonded_force.getNumParticles()):
             _, sigma, epsilon = nonbonded_force.getParticleParameters(particle_index)
             nonbonded_force.setParticleParameters(particle_index, 0.0, sigma, epsilon)
-        
+
         nonbonded_method = NONBONDED_METHODS[nonbonded_force.getNonbondedMethod()]
         cutoff_distance = nonbonded_force.getCutoffDistance()
 
         # Pesudocode from here to end of file!
         # First attempt to create MPIDForce
         # Create the MPID force
-        methodMap = {NoCutoff:MPIDForce.NoCutoff,
-                     PME:MPIDForce.PME,
-                     LJPME:MPIDForce.PME}
+        methodMap = {
+            NoCutoff: MPIDForce.NoCutoff,
+            PME: MPIDForce.PME,
+            LJPME: MPIDForce.PME,
+        }
         mpid_collection = interchange.collections["MPID"]
 
         mpid_force = MPIDForce()
-        
+
         mpid_force.setNonbondedMethod(methodMap[nonbonded_method])
 
         mpid_force.setCutoffDistance(cutoff_distance)
@@ -258,6 +262,8 @@ class MPIDCollection(SMIRNOFFCollection):
                 "dipole": np.zeros(3).tolist(),
                 "quadrupole": np.zeros(6).tolist(),
                 "octopole": np.zeros(10).tolist(),
+                # notes on axisType
+                # https://github.com/openmm/openmm/blob/71b2a93e09d9d5f110310448c9ff503eb2e71d55/plugins/amoeba/openmmapi/include/openmm/AmoebaMultipoleForce.h#L96
                 "axisType": 5,
                 "thole": 8.0,
             }
@@ -298,13 +304,14 @@ class MPIDCollection(SMIRNOFFCollection):
                     potential_key.parameters["thole"].magnitude
                 )
 
-        ## Add multipoles
+        ## Add multipoles to force
         ## Find covalentMap
         omm_ff = ForceField()
         data = omm_ff._SystemData(interchange.topology.to_openmm())
 
-        ## Reference 
+        ## Reference
         ## https://github.com/openmm/openmm/blob/master/plugins/amoeba/openmmapi/src/AmoebaMultipoleForce.cpp
+        ## https://github.com/openmm/openmm/blob/71b2a93e09d9d5f110310448c9ff503eb2e71d55/wrappers/python/openmm/app/forcefield.py#L4909
         bonded12ParticleSets = AmoebaVdwGenerator.getBondedParticleSets(system, data)
 
         bonded13ParticleSets = []
@@ -314,7 +321,7 @@ class MPIDCollection(SMIRNOFFCollection):
             for j in bonded12ParticleSet:
                 bonded13Set = bonded13Set.union(bonded12ParticleSets[j])
 
-        # remove 1-2 and self from set
+            # remove 1-2 and self from set
 
             bonded13Set = bonded13Set - bonded12ParticleSet
             selfSet = set()
@@ -332,7 +339,7 @@ class MPIDCollection(SMIRNOFFCollection):
             for j in bonded13ParticleSet:
                 bonded14Set = bonded14Set.union(bonded12ParticleSets[j])
 
-        # remove 1-3, 1-2 and self from set
+            # remove 1-3, 1-2 and self from set
 
             bonded14Set = bonded14Set - bonded12ParticleSets[i]
             bonded14Set = bonded14Set - bonded13ParticleSet
@@ -349,18 +356,24 @@ class MPIDCollection(SMIRNOFFCollection):
                 parameter_maps[particle]["quadrupole"],
                 parameter_maps[particle]["octopole"],
                 parameter_maps[particle]["axisType"],
+                # zaxis, xaxis, yaxis
                 -1,
                 -1,
                 -1,
                 parameter_maps[particle]["thole"],
                 parameter_maps[particle]["polarizability"],
             )
-        ## TODO: Add `CovalentMap`
-            mpid_force.setCovalentMap(particle, MPIDForce.Covalent12, tuple(bonded12ParticleSets[particle]))
-            mpid_force.setCovalentMap(particle, MPIDForce.Covalent13, tuple(bonded13ParticleSets[particle]))
-            mpid_force.setCovalentMap(particle, MPIDForce.Covalent14, tuple(bonded14ParticleSets[particle]))
+
+            mpid_force.setCovalentMap(
+                particle, MPIDForce.Covalent12, tuple(bonded12ParticleSets[particle])
+            )
+            mpid_force.setCovalentMap(
+                particle, MPIDForce.Covalent13, tuple(bonded13ParticleSets[particle])
+            )
+            mpid_force.setCovalentMap(
+                particle, MPIDForce.Covalent14, tuple(bonded14ParticleSets[particle])
+            )
 
         system.addForce(mpid_force)
-
 
         # Plus whatever other housekeeping needs to happen with the OpenMM forces
