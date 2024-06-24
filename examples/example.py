@@ -1,4 +1,4 @@
-from mpid_plugin.nonbonded import (DPolCollection, DPolMultipoleHandler,
+from dpol_plugin.nonbonded import (DPolCollection, DPolMultipoleHandler,
                                    DPolPolarizabilityHandler)
 from openeye import oechem
 from openff.interchange import Interchange
