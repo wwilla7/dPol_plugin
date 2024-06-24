@@ -1,29 +1,23 @@
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Set, Tuple, Union
-from pydantic import Field
+from typing import TYPE_CHECKING, Dict, List, Literal, Set, Tuple, Union
 
+import numpy as np
 import openmm
 from openff.interchange import Interchange
 from openff.interchange.components.potentials import Potential
 from openff.interchange.models import PotentialKey, TopologyKey
 from openff.interchange.smirnoff._nonbonded import SMIRNOFFCollection
-from openff.models.types import FloatQuantity
 from openff.toolkit import Topology
 from openff.toolkit.typing.engines.smirnoff.parameters import (
     ParameterAttribute,
     ParameterHandler,
     ParameterType,
-    _allow_only,
     unit,
 )
-
-import mpidplugin
-from mpidplugin import MPIDForce
-from openmm.app import ForceField
-from openmm.app import NoCutoff, PME, LJPME
-
-NONBONDED_METHODS = {0: NoCutoff, 4: PME, 5: LJPME}
+from openmm import AmoebaMultipoleForce
+from openmm.app import LJPME, PME, ForceField, NoCutoff
 from openmm.app.forcefield import AmoebaVdwGenerator
-import numpy as np
+
+NONBONDED_METHODS = {0: NoCutoff, 4: PME}
 
 if TYPE_CHECKING:
     from openff.interchange.models import VirtualSiteKey
@@ -33,73 +27,62 @@ if TYPE_CHECKING:
 
 class MultipoleKey(TopologyKey):
     name = Literal["Multipole"]
-    pass
 
 
 class PolarizabilityKey(TopologyKey):
     name = Literal["Polarizability"]
-    pass
 
 
-class MPIDMultipoleHandler(ParameterHandler):
+class DPolMultipoleHandler(ParameterHandler):
     """
-    <MPIDForce coulomb14scale="1.0" >
-      <Multipole type="OW" c0="-0.834" />
-      <Multipole type="HW" c0="0.417" />
-      <Multipole type="HA3" c0="0.09" />
-      <Multipole type="CT3" c0="-0.27" />
-      <Polarize type="OW" polarizabilityXX="0.00088" polarizabilityYY="0.00088" polarizabilityZZ="0.00088" thole="8.0"/>
-      <Polarize type="CT3" polarizabilityXX="0.00068" polarizabilityYY="0.00068" polarizabilityZZ="0.00068" thole="8.0"/>
-    </MPIDForce>
+    <AmoebaMultipoleForce direct11Scale="0.0" direct12Scale="1.0" direct13Scale="1.0" direct14Scale="1.0" mpole12Scale="0.0"
+    mpole13Scale="0.0" mpole14Scale="0.5" mpole15Scale="1.0" mutual11Scale="1.0" mutual12Scale="1.0" mutual13Scale="1.0"
+    mutual14Scale="1.0" polar12Scale="0.0" polar13Scale="0.0" polar14Intra="0.5" polar14Scale="1.0" polar15Scale="1.0">
+      <Multipole type="301" kz="0" c0="-0.6870676714866755"
+                                   d1="0.0" d2="0.0" d3="0.0" q11="0.0" q21="0.0" q22="0.0" q31="0.0" q32="0.0" q33="0.0"/>
+      <Multipole type="302" kz="0" c0="0.34353383574333773"
+                                   d1="0.0" d2="0.0" d3="0.0" q11="0.0" q21="0.0" q22="0.0" q31="0.0" q32="0.0" q33="0.0"/>
+      <Polarize type="301" polarizability="0.0008987586822022096" thole="0.0" pgrp1="302"/>
+      <Polarize type="302" polarizability="0.00012531035951495126" thole="0.0" pgrp1="301"/>
+    </AmoebaMultipoleForce>
     """
 
-    class MPIDMultipole(ParameterType):
+    class DPolMultipole(ParameterType):
         _VALENCE_TYPE = "Atom"
         _ELEMENT_NAME = "Multipole"
 
         # This is just the charge, which is handled here instead of the NonbondedForce
         c0 = ParameterAttribute(default=None, unit=unit.elementary_charge)
 
-    _TAGNAME = "MPIDMultipole"
-    _INFOTYPE = MPIDMultipole
-
-    # https://github.com/andysim/MPIDOpenMMPlugin/blob/43450d73e567772e8892cabf9dde7f6c34913e4e/examples/ethane_water_charge_only/ethane_water.xml#L57
-    coulomb14scale = ParameterAttribute(default=1.0, converter=float)
+    _TAGNAME = "DPolMultipole"
+    _INFOTYPE = DPolMultipole
 
 
-class MPIDPolarizabilityHandler(ParameterHandler):
-    class MPIDPolarizability(ParameterType):
+class DPolPolarizabilityHandler(ParameterHandler):
+    class DPolPolarizability(ParameterType):
         _VALENCE_TYPE = "Atom"
         _ELEMENT_NAME = "Polarizability"
 
-        polarizabilityXX = ParameterAttribute(default=None, unit=unit.nanometer**3)
-        polarizabilityYY = ParameterAttribute(default=None, unit=unit.nanometer**3)
-        polarizabilityZZ = ParameterAttribute(default=None, unit=unit.nanometer**3)
+        polarizability = ParameterAttribute(default=None, unit=unit.nanometer**3)
 
-        thole = ParameterAttribute(default=None, unit=unit.dimensionless)
+        # direct polarization model doesn't need thole damping, set to zero
+        # thole = ParameterAttribute(default=0.0, unit=unit.dimensionless)
 
-    _TAGNAME = "MPIDPolarizability"
-    _INFOTYPE = MPIDPolarizability
-
-    # https://github.com/andysim/MPIDOpenMMPlugin/blob/43450d73e567772e8892cabf9dde7f6c34913e4e/examples/ethane_water_charge_only/ethane_water.xml#L57
-    coulomb14scale = ParameterAttribute(default=1.0, converter=float)
+    _TAGNAME = "DPolPolarizability"
+    _INFOTYPE = DPolPolarizability
 
 
-class MPIDCollection(SMIRNOFFCollection):
+class DPolCollection(SMIRNOFFCollection):
     is_plugin = True
-    acts_as: str = "MPID"
+    acts_as: str = "DPol"
 
-    type: Literal["MPID"] = "MPID"
+    type: Literal["DPol"] = "DPol"
 
     expression: str = "Direct Polarization"
 
-    coulomb14scale: float = Field(
-        1.0, description="The scaling factor applied to 1-4 interactions"
-    )
-
     @classmethod
     def allowed_parameter_handlers(cls):
-        return [MPIDMultipoleHandler, MPIDPolarizabilityHandler]
+        return [DPolMultipoleHandler, DPolPolarizabilityHandler]
 
     @classmethod
     def supported_parameters(cls):
@@ -107,10 +90,7 @@ class MPIDCollection(SMIRNOFFCollection):
             "smirks",
             "id",
             "c0",
-            "polarizabilityXX",
-            "polarizabilityYY",
-            "polarizabilityZZ",
-            "thole",
+            "polarizability",
         )
 
     def store_matches(
@@ -123,16 +103,15 @@ class MPIDCollection(SMIRNOFFCollection):
 
         # Assume there are two parameter handlers, one for multipole and one for polarizability
         multipole_handler = [
-            x for x in parameter_handler if x.TAGNAME == "MPIDMultipole"
+            x for x in parameter_handler if x.TAGNAME == "DPolMultipole"
         ][0]
         polarizability_handler = [
-            x for x in parameter_handler if x.TAGNAME == "MPIDPolarizability"
+            x for x in parameter_handler if x.TAGNAME == "DPolPolarizability"
         ][0]
 
         # The multipole stores charges, so assume all atoms have a multipole
         multipole_matches = multipole_handler.find_matches(topology)
 
-        # not all atoms have polarizbility
         polarizability_matches = polarizability_handler.find_matches(topology)
 
         # WW has custom charges (stored as multipole parameters) using a custom model,
@@ -159,16 +138,14 @@ class MPIDCollection(SMIRNOFFCollection):
 
     def store_potentials(self, parameter_handler: List[ParameterHandler]):
         multipole_handler = [
-            x for x in parameter_handler if x.TAGNAME == "MPIDMultipole"
+            x for x in parameter_handler if x.TAGNAME == "DPolMultipole"
         ][0]
         polarizability_handler = [
-            x for x in parameter_handler if x.TAGNAME == "MPIDPolarizability"
+            x for x in parameter_handler if x.TAGNAME == "DPolPolarizability"
         ][0]
 
-        self.coulomb14scale = parameter_handler[0].coulomb14scale
-
         for topology_key, potential_key in self.key_map.items():
-            if potential_key.associated_handler == "MPIDMultipole":
+            if potential_key.associated_handler == "DPolMultipole":
                 smirks = potential_key.id
                 parameter = multipole_handler.parameters[smirks]
 
@@ -176,16 +153,13 @@ class MPIDCollection(SMIRNOFFCollection):
                     parameters={"c0": parameter.c0}
                 )
 
-            if potential_key.associated_handler == "MPIDPolarizability":
+            if potential_key.associated_handler == "DPolPolarizability":
                 smirks = potential_key.id
                 parameter = polarizability_handler.parameters[smirks]
 
                 self.potentials[topology_key] = Potential(
                     parameters={
-                        "polarizabilityXX": parameter.polarizabilityXX,
-                        "polarizabilityYY": parameter.polarizabilityYY,
-                        "polarizabilityZZ": parameter.polarizabilityZZ,
-                        "thole": parameter.thole,
+                        "polarizability": parameter.polarizability,
                     }
                 )
 
@@ -195,11 +169,7 @@ class MPIDCollection(SMIRNOFFCollection):
         parameter_handler: List[ParameterHandler],
         topology: Topology,
     ):
-        # Assume the two handlers have the same coluomb14scale
-        handler = cls(
-            coulomb14scale=parameter_handler[0].coulomb14scale,
-        )
-
+        handler = cls()
         handler.store_matches(parameter_handler=parameter_handler, topology=topology)
         handler.store_potentials(parameter_handler=parameter_handler)
 
@@ -233,22 +203,20 @@ class MPIDCollection(SMIRNOFFCollection):
         cutoff_distance = nonbonded_force.getCutoffDistance()
 
         # Pesudocode from here to end of file!
-        # First attempt to create MPIDForce
-        # Create the MPID force
+        # First attempt to create DPolForce
+        # Create the DPol force
         methodMap = {
-            NoCutoff: MPIDForce.NoCutoff,
-            PME: MPIDForce.PME,
-            LJPME: MPIDForce.PME,
+            NoCutoff: AmoebaMultipoleForce.NoCutoff,
+            PME: AmoebaMultipoleForce.PME,
         }
-        mpid_collection = interchange.collections["MPID"]
+        mpid_collection = interchange.collections["DPol"]
 
-        mpid_force = MPIDForce()
+        dpol_force = AmoebaMultipoleForce()
 
-        mpid_force.setNonbondedMethod(methodMap[nonbonded_method])
+        dpol_force.setNonbondedMethod(methodMap[nonbonded_method])
 
-        mpid_force.setCutoffDistance(cutoff_distance)
-        mpid_force.setPolarizationType(MPIDForce.Direct)
-        mpid_force.set14ScaleFactor(mpid_collection.coulomb14scale)
+        dpol_force.setCutoffDistance(cutoff_distance)
+        dpol_force.setPolarizationType(AmoebaMultipoleForce.Direct)
 
         # Every atom has partial charge but not every atom has polarizability parameter
         # Let's start with all of them have both charges and polarizabilities
@@ -260,12 +228,10 @@ class MPIDCollection(SMIRNOFFCollection):
         parameter_maps = {
             i: {
                 "dipole": np.zeros(3).tolist(),
-                "quadrupole": np.zeros(6).tolist(),
-                "octopole": np.zeros(10).tolist(),
+                "quadrupole": np.zeros(9).tolist(),
                 # notes on axisType
                 # https://github.com/openmm/openmm/blob/71b2a93e09d9d5f110310448c9ff503eb2e71d55/plugins/amoeba/openmmapi/include/openmm/AmoebaMultipoleForce.h#L96
                 "axisType": 5,
-                "thole": 8.0,
             }
             for i in range(n_particles)
         }
@@ -279,33 +245,20 @@ class MPIDCollection(SMIRNOFFCollection):
                 # multipole: Potential = mpid_collection.potentials[potential_key]
                 # Set multipole on multipole force using OpenMM particle index,
                 # c0 from `potential_key.parameters['c0']`
-                parameter_maps[openmm_particle_index][
-                    "charge"
-                ] = potential_key.parameters["c0"].m_as(unit.elementary_charge)
+                parameter_maps[openmm_particle_index]["charge"] = (
+                    potential_key.parameters["c0"].m_as(unit.elementary_charge)
+                )
 
             if isinstance(topology_key, PolarizabilityKey):
                 # polarizability: Potential = mpid_collection.potentials[potential_key]
                 # Set polarizability on multipole force using OpenMM particle index,
                 # polarizabilityXX, polarizabilityYY, polarizabilityZZ, thole from
                 # `potential_key.parameters['polarizabilityXX']`, etc.
-                parameter_maps[openmm_particle_index]["polarizability"] = [
-                    potential_key.parameters["polarizabilityXX"].m_as(
-                        unit.nanometer**3
-                    ),
-                    potential_key.parameters["polarizabilityYY"].m_as(
-                        unit.nanometer**3
-                    ),
-                    potential_key.parameters["polarizabilityZZ"].m_as(
-                        unit.nanometer**3
-                    ),
-                ]
-
-                parameter_maps[openmm_particle_index]["thole"] = float(
-                    potential_key.parameters["thole"].magnitude
+                parameter_maps[openmm_particle_index]["polarizability"] = (
+                    potential_key.parameters["polarizability"].m_as(unit.nanometer**3)
                 )
 
-        ## Add multipoles to force
-        ## Find covalentMap
+        # Find covalentMap
         omm_ff = ForceField()
         data = omm_ff._SystemData(interchange.topology.to_openmm())
 
@@ -349,31 +302,95 @@ class MPIDCollection(SMIRNOFFCollection):
             bonded14Set = set(sorted(bonded14Set))
             bonded14ParticleSets.append(bonded14Set)
 
+        # 1-5
+
+        bonded15ParticleSets = []
+        for i in range(len(data.atoms)):
+            bonded15Set = set()
+            bonded14ParticleSet = bonded14ParticleSets[i]
+            for j in bonded14ParticleSet:
+                bonded15Set = bonded15Set.union(bonded12ParticleSets[j])
+
+            # remove 1-4, 1-3, 1-2 and self from set
+
+            bonded15Set = bonded15Set - bonded12ParticleSets[i]
+            bonded15Set = bonded15Set - bonded13ParticleSets[i]
+            bonded15Set = bonded15Set - bonded14ParticleSet
+            selfSet = set()
+            selfSet.add(i)
+            bonded15Set = bonded15Set - selfSet
+            bonded15Set = set(sorted(bonded15Set))
+            bonded15ParticleSets.append(bonded15Set)
+
         for particle in range(n_particles):
-            mpid_force.addMultipole(
-                parameter_maps[particle]["charge"],
-                parameter_maps[particle]["dipole"],
-                parameter_maps[particle]["quadrupole"],
-                parameter_maps[particle]["octopole"],
-                parameter_maps[particle]["axisType"],
+            dpol_force.addMultipole(
+                charge=parameter_maps[particle]["charge"],
+                molecularDipole=parameter_maps[particle]["dipole"],
+                molecularQuadrupole=parameter_maps[particle]["quadrupole"],
+                axisType=parameter_maps[particle]["axisType"],
                 # zaxis, xaxis, yaxis
-                -1,
-                -1,
-                -1,
-                parameter_maps[particle]["thole"],
-                parameter_maps[particle]["polarizability"],
+                multipoleAtomZ=-1,
+                multipoleAtomX=-1,
+                multipoleAtomY=-1,
+                thole=0,
+                dampingFactor=0,
+                polarity=parameter_maps[particle]["polarizability"],
             )
 
-            mpid_force.setCovalentMap(
-                particle, MPIDForce.Covalent12, tuple(bonded12ParticleSets[particle])
+            dpol_force.setCovalentMap(
+                particle,
+                AmoebaMultipoleForce.Covalent12,
+                tuple(bonded12ParticleSets[particle]),
             )
-            mpid_force.setCovalentMap(
-                particle, MPIDForce.Covalent13, tuple(bonded13ParticleSets[particle])
+            dpol_force.setCovalentMap(
+                particle,
+                AmoebaMultipoleForce.Covalent13,
+                tuple(bonded13ParticleSets[particle]),
             )
-            mpid_force.setCovalentMap(
-                particle, MPIDForce.Covalent14, tuple(bonded14ParticleSets[particle])
+            dpol_force.setCovalentMap(
+                particle,
+                AmoebaMultipoleForce.Covalent14,
+                tuple(bonded14ParticleSets[particle]),
+            )
+            dpol_force.setCovalentMap(
+                particle,
+                AmoebaMultipoleForce.Covalent15,
+                tuple(bonded15ParticleSets[particle]),
             )
 
-        system.addForce(mpid_force)
+            # add artificial covalent 15 on nonbonded force
+            covalent15 = tuple(bonded15ParticleSets[particle])
+            if len(covalent15) > 0:
+                for p in covalent15:
+                    if p < particle:
+                        q1, s1, e1 = nonbonded_force.getParticleParameters(particle)
+                        q2, s2, e2 = nonbonded_force.getParticleParameters(p)
+                        nonbonded_force.addException(
+                            particle1=particle,
+                            particle2=p,
+                            chargeProd=0 * openmm.unit.elementary_charge**2,
+                            sigma=0.5 * (s1 + s2),
+                            epsilon=np.sqrt(e1 * e2),
+                        )
 
-        # Plus whatever other housekeeping needs to happen with the OpenMM forces
+            # put 1-2, 1-3 in the same polarization group
+            polar11 = (
+                tuple(bonded12ParticleSets[particle])
+                + tuple(bonded13ParticleSets[particle])
+                + (particle,)
+            )
+            dpol_force.setCovalentMap(
+                particle, AmoebaMultipoleForce.PolarizationCovalent11, polar11
+            )
+
+            polar12 = tuple(bonded14ParticleSets[particle])
+            dpol_force.setCovalentMap(
+                particle, AmoebaMultipoleForce.PolarizationCovalent12, polar12
+            )
+
+            polar13 = tuple(bonded15ParticleSets[particle])
+            dpol_force.setCovalentMap(
+                particle, AmoebaMultipoleForce.PolarizationCovalent13, polar13
+            )
+
+        system.addForce(dpol_force)

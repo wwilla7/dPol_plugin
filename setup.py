@@ -1,5 +1,5 @@
 """
-MPID plugins for SMIRNOFF.
+DPol plugins for SMIRNOFF.
 """
 from setuptools import setup
 
@@ -10,11 +10,11 @@ setup(
     include_package_data=True,
     entry_points={
         "openff.toolkit.plugins.handlers": [
-            "MPIDMultipoleHandler = mpid_plugin.nonbonded:MPIDMultipoleHandler",
-            "MPIDPolarizabilityHandler = mpid_plugin.nonbonded:MPIDPolarizabilityHandler",
+            "DPolMultipoleHandler = mpid_plugin.nonbonded:DPolMultipoleHandler",
+            "DPolPolarizabilityHandler = mpid_plugin.nonbonded:DPolPolarizabilityHandler",
         ],
         "openff.interchange.plugins.collections": [
-            "MPIDCollection = mpid_plugin.nonbonded:MPIDCollection",
+            "DPolCollection = mpid_plugin.nonbonded:DPolCollection",
         ],
     },
 )
