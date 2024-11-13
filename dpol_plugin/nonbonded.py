@@ -4,7 +4,11 @@ import numpy as np
 import openmm
 from openff.interchange import Interchange
 from openff.interchange.components.potentials import Potential
-from openff.interchange.models import PotentialKey, TopologyKey
+from openff.interchange.models import (
+    PotentialKey,
+    TopologyKey,
+    LibraryChargeTopologyKey,
+)
 from openff.interchange.smirnoff._nonbonded import SMIRNOFFCollection
 from openff.toolkit import Topology
 from openff.toolkit.typing.engines.smirnoff.parameters import (
@@ -25,12 +29,14 @@ if TYPE_CHECKING:
 # https://docs.openforcefield.org/projects/interchange/en/v0.3.0-staging/using/plugins.html
 
 
-class MultipoleKey(TopologyKey):
-    name = Literal["Multipole"]
+class MultipoleKey(LibraryChargeTopologyKey):
+    # name = Literal["Multipole"]
+    type: Literal["Multipole"] = "Multipole"
 
 
 class PolarizabilityKey(TopologyKey):
-    name = Literal["Polarizability"]
+    # name = Literal["Polarizability"]
+    type: Literal["Polarizability"] = "Polarizability"
 
 
 class DPolMultipoleHandler(ParameterHandler):
@@ -73,7 +79,7 @@ class DPolPolarizabilityHandler(ParameterHandler):
 
 
 class DPolCollection(SMIRNOFFCollection):
-    is_plugin = True
+    is_plugin: bool = True
     acts_as: str = "DPol"
 
     type: Literal["DPol"] = "DPol"
@@ -121,7 +127,7 @@ class DPolCollection(SMIRNOFFCollection):
         # or more complex SMIRKS patterns.) So need to store the different types of keys,
         # cannot collapse them.
         for key, val in multipole_matches.items():
-            topology_key = MultipoleKey(atom_indices=key)
+            topology_key = MultipoleKey(this_atom_index=key[0])
             potential_key = PotentialKey(
                 id=val.parameter_type.smirks,
                 associated_handler=multipole_handler.TAGNAME,
@@ -245,18 +251,18 @@ class DPolCollection(SMIRNOFFCollection):
                 # multipole: Potential = mpid_collection.potentials[potential_key]
                 # Set multipole on multipole force using OpenMM particle index,
                 # c0 from `potential_key.parameters['c0']`
-                parameter_maps[openmm_particle_index]["charge"] = (
-                    potential_key.parameters["c0"].m_as(unit.elementary_charge)
-                )
+                parameter_maps[openmm_particle_index][
+                    "charge"
+                ] = potential_key.parameters["c0"].m_as(unit.elementary_charge)
 
             if isinstance(topology_key, PolarizabilityKey):
                 # polarizability: Potential = mpid_collection.potentials[potential_key]
                 # Set polarizability on multipole force using OpenMM particle index,
                 # polarizabilityXX, polarizabilityYY, polarizabilityZZ, thole from
                 # `potential_key.parameters['polarizabilityXX']`, etc.
-                parameter_maps[openmm_particle_index]["polarizability"] = (
-                    potential_key.parameters["polarizability"].m_as(unit.nanometer**3)
-                )
+                parameter_maps[openmm_particle_index][
+                    "polarizability"
+                ] = potential_key.parameters["polarizability"].m_as(unit.nanometer**3)
 
         # Find covalentMap
         omm_ff = ForceField()
