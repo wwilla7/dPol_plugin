@@ -1,8 +1,6 @@
-from dpol_plugin.nonbonded import (DPolCollection, DPolMultipoleHandler,
-                                   DPolPolarizabilityHandler)
-from openeye import oechem
+from dpol_plugin.nonbonded import DPolMultipoleHandler, DPolPolarizabilityHandler
 from openff.interchange import Interchange
-from openff.toolkit import ForceField, Molecule, Topology
+from openff.toolkit import ForceField, Molecule
 from openff.toolkit.utils.exceptions import DuplicateParameterError
 from openff.units import unit
 from openmm import XmlSerializer

@@ -115,17 +115,10 @@ class DPolCollection(SMIRNOFFCollection):
             x for x in parameter_handler if x.TAGNAME == "DPolPolarizability"
         ][0]
 
-        # The multipole stores charges, so assume all atoms have a multipole
         multipole_matches = multipole_handler.find_matches(topology)
 
         polarizability_matches = polarizability_handler.find_matches(topology)
 
-        # WW has custom charges (stored as multipole parameters) using a custom model,
-        # which has potentially many smirks-to-charge mappings. By contrast, there are
-        # only polarizability terms on CHON atoms, and (for now) all C have the same
-        # polarizability parameters, all hydrogens, etc. (In the future there may be more,
-        # or more complex SMIRKS patterns.) So need to store the different types of keys,
-        # cannot collapse them.
         for key, val in multipole_matches.items():
             topology_key = MultipoleKey(this_atom_index=key[0])
             potential_key = PotentialKey(
@@ -208,8 +201,6 @@ class DPolCollection(SMIRNOFFCollection):
         nonbonded_method = NONBONDED_METHODS[nonbonded_force.getNonbondedMethod()]
         cutoff_distance = nonbonded_force.getCutoffDistance()
 
-        # Pesudocode from here to end of file!
-        # First attempt to create DPolForce
         # Create the DPol force
         methodMap = {
             NoCutoff: AmoebaMultipoleForce.NoCutoff,
@@ -223,10 +214,6 @@ class DPolCollection(SMIRNOFFCollection):
 
         dpol_force.setCutoffDistance(cutoff_distance)
         dpol_force.setPolarizationType(AmoebaMultipoleForce.Direct)
-
-        # Every atom has partial charge but not every atom has polarizability parameter
-        # Let's start with all of them have both charges and polarizabilities
-        # No multipole parameters
 
         n_particles = system.getNumParticles()
 
@@ -258,8 +245,7 @@ class DPolCollection(SMIRNOFFCollection):
             if isinstance(topology_key, PolarizabilityKey):
                 # polarizability: Potential = mpid_collection.potentials[potential_key]
                 # Set polarizability on multipole force using OpenMM particle index,
-                # polarizabilityXX, polarizabilityYY, polarizabilityZZ, thole from
-                # `potential_key.parameters['polarizabilityXX']`, etc.
+                # `potential_key.parameters['polarizability']`, etc.
                 parameter_maps[openmm_particle_index][
                     "polarizability"
                 ] = potential_key.parameters["polarizability"].m_as(unit.nanometer**3)
@@ -364,7 +350,7 @@ class DPolCollection(SMIRNOFFCollection):
                 tuple(bonded15ParticleSets[particle]),
             )
 
-            # add artificial covalent 15 on nonbonded force
+            # add covalent 15 on nonbonded force but do not scale
             covalent15 = tuple(bonded15ParticleSets[particle])
             if len(covalent15) > 0:
                 for p in covalent15:
